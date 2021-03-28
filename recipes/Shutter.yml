@@ -1,0 +1,16 @@
+app: Shutter
+
+ingredients:
+  packages:
+    - shutter
+    - libgoo-canvas-perl
+    - libgtk2-appindicator-perl
+  ppas:
+    - ppa:shutter/ppa
+    #- ppa:linuxuprising/shutter
+  dist: xenial
+  sources: 
+    - deb http://archive.ubuntu.com/ubuntu/ xenial main universe
+
+script:
+  - mv -v ./usr/lib/*/perl5/* ./usr/lib/perl5/
