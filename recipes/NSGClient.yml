@@ -1,0 +1,64 @@
+app: NSGClient
+
+ingredients:
+  dist: xenial
+  packages:
+    #- https://vpnexterns.diba.cat/vpn/scripts/linux/nsginstaller64.deb
+    - https://vpn.diba.cat/vpn/scripts/linux/nsginstaller64.deb
+    - libcurl3
+    - libnl-cli-3-200
+    - libappindicator1
+    - libnm0
+    - libnm-util2
+    - libnm-glib4
+  sources:
+    - deb http://archive.ubuntu.com/ubuntu/ xenial main universe security
+
+script:
+  - echo -e '#!/bin/sh\necho -n "0.0.0.1"' > usr/bin/dpkg-query
+  - chmod +x usr/bin/dpkg-query
+  #- mv opt/Citrix Citrix
+  #- mv Citrix/NSGClient/bin/* usr/bin
+  #- mv Citrix/NSGClient/service/nsgverctl usr/bin
+  #- sed -i 's|/opt/Citrix/|.////Citrix/|g' usr/bin/NSGClient
+  #- sed -i 's|/opt/Citrix/|.////Citrix/|g' usr/bin/nsgverctl
+
+  - cat > usr/bin/AppRun_srv.sh <<\EOF 
+  - #!/bin/bash
+  - set -xe
+  - [ $UID != 0 ] && { pkexec "$0" "$@" && exit 0 || exit 1; }
+  - trap 'killall -v nsgverctl' EXIT
+  - rsync -av "$1" /opt/Citrix/
+  - LD_LIBRARY_PATH=/opt/Citrix/NSGClient/service/ /opt/Citrix/NSGClient/service/nsgverctl &
+  - while pidof NSGClient >/dev/null; do sleep 1; done # Kill the daemon when the client is closed
+  - EOF
+  - chmod +x usr/bin/AppRun_srv.sh
+
+  - cat > usr/bin/AppRun.sh <<\EOF 
+  - #!/bin/bash
+  - set -xe
+  - cd "$(dirname $0)/../.." 
+  - unset GTK_MODULES
+  - mkdir -p "$HOME/.citrix/" # The AppImage is mounted without "-o allow_other", and we need root to run this service
+  - cp -v usr/bin/AppRun_srv.sh "$HOME/.citrix/service.sh" 
+  - rsync -av "$PWD/opt/Citrix/" "$HOME/.citrix/Citrix/"
+  - for bin in "$HOME/.citrix/Citrix/NSGClient/service/nsgverctl" "$HOME/.citrix/Citrix/NSGClient/bin/NSGClient"; do
+  -   ldd "$bin" | awk -vm="$PWD" 'match($0,m) { print $3 }' | xargs cp -vnt "$(dirname "$bin")/"
+  - done
+  - "$HOME/.citrix/service.sh" "$HOME/.citrix/Citrix/" &
+  - while [ ! -f /opt/Citrix/NSGClient/bin/NSGClient ]; do echo "/opt/Citrix/NSGClient/bin/NSGClient is not accesible yet"; sleep 1; done
+  - LD_LIBRARY_PATH=/opt/Citrix/NSGClient/bin/ /opt/Citrix/NSGClient/bin/NSGClient
+  - EOF
+  - chmod +x usr/bin/AppRun.sh
+
+  - convert opt/Citrix/NSGClient/resx/images/icon_vpn.ico icon_vpn.png
+  - mv icon_vpn-0.png icon_vpn.png
+  - rm -f icon_vpn-?.png
+
+  - mv opt/Citrix/NSGClient/bin/nsgclient.desktop nsgclient.desktop
+  - sed -i '/Version=.*/d' nsgclient.desktop
+  - sed -i 's/Name=.*/Name=Citrix_NetScaler_Gateway_Client/' nsgclient.desktop
+  - sed -i 's/Application;//' nsgclient.desktop
+  - sed -i 's/=False/=false/' nsgclient.desktop
+  - sed -i 's|Exec=.*|Exec=AppRun.sh|' nsgclient.desktop
+  - sed -i 's/Icon=.*/Icon=icon_vpn/' nsgclient.desktop
